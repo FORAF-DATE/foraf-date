@@ -4,11 +4,26 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+
     <!-- Aggregator POM for the FORAF-DATE microservices monorepo.
-         Each directory under services/ will hold an independent Maven project.
-         Add a <module> entry here only when the service has its own pom.xml. -->
+         Each directory under services/ holds an independent Maven project.
+         A <module> entry is added once that service has its own pom.xml. -->
     <groupId>org.forafdate</groupId>
     <artifactId>foraf-date-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <modules>
+        <module>services/ms-auth</module>
+    </modules>
 </project>

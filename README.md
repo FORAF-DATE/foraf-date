@@ -7,21 +7,24 @@ Monorepo for FORAF-DATE, a web, mobile, and desktop platform for managing ophtha
 ```text
 foraf-date/
 ├── services/
-│   ├── ms-auth/       # Authentication microservice (placeholder)
+│   ├── ms-auth/       # Authentication microservice (Maven module)
 │   └── ms-patients/   # Patients microservice (placeholder)
 ├── pom.xml            # Root Maven aggregator POM
 ├── .gitignore         # Global ignore rules for every module
 └── README.md
 ```
 
-Each directory under `services/` is reserved for one independent Maven project (a microservice). The `.gitkeep` files keep those folders tracked in Git until the service code is added.
+Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created.
 
 ## Root pom.xml
 
-The root `pom.xml` is the aggregator POM for the microservices monorepo. It uses `<packaging>pom</packaging>` and the coordinates `org.forafdate:foraf-date-parent:1.0.0-SNAPSHOT`, and it lets the whole platform be validated from the repository root with one command:
+The root `pom.xml` is the aggregator POM for the microservices monorepo. It uses `<packaging>pom</packaging>` with coordinates `org.forafdate:foraf-date-parent:1.0.0-SNAPSHOT`, inherits Spring Boot `4.1.1`, and sets Java 21 for every module.
+
+`ms-auth` is declared in `<modules>` and can be compiled either from the repository root (reactor build) or from its own directory:
 
 ```bash
-mvn validate
+mvn compile
+cd services/ms-auth && mvn compile
 ```
 
-No `<modules>` are declared yet. A `<module>` entry is added to the root POM only when the corresponding service has its own `pom.xml`, so the reactor stays valid while services are being initialized.
+A `<module>` entry is added for the remaining services only when each one has its own `pom.xml`.
