@@ -8,7 +8,7 @@ Monorepo de FORAF-DATE con una arquitectura de microservicios planeada para AWS.
 
 | Servicio | Puerto (config) | Responsabilidad | Persistencia / dependencia |
 |---|---:|---|---|
-| `ms-auth` | `8080` | Registro, sign-in, sign-out y sesiones de pacientes | PostgreSQL `ms_auth` |
+| `ms-auth` | `8080` | Registro de pacientes, sign-in de pacientes y staff, sign-out y sesiones | PostgreSQL `ms_auth` |
 | `ms-auth-db` | `${DB_PORT}` desde `.env` | Base de datos local de MS-Auth | Volumen `ms_auth_pgdata` |
 | `ms-patients` | — | Placeholder del microservicio de pacientes | `.gitkeep` |
 
@@ -25,6 +25,7 @@ Es la vía norte-sur pública. El cliente llama directamente a `ms-auth` en `htt
 - `POST /api/auth/patients/registration` → `PatientRegistrationController.java:21`
 - `POST /api/auth/patients/login` → `PatientSignInController.java:27`
 - `GET /api/auth/patients/me` → `PatientSignInController.java:34`
+- `POST /api/auth/staff/login` → `StaffSignInController.java:20`
 - `POST /api/auth/logout` → `SignOutController.java:20`
 - `GET /actuator/health` → configurado en `application.properties:17-20`
 
@@ -89,6 +90,8 @@ Solo está expuesto Actuator health: `/actuator/health` con detalles siempre vis
 8. `GET /api/auth/patients/me` con el token → `200`.
 9. `POST /api/auth/logout` con el token → `204` y escribe `revoked_at`.
 10. `GET /api/auth/patients/me` con el mismo token → `401 SESSION_INVALID`.
+11. `POST /api/auth/staff/login` con una cuenta `ADMINISTRATOR`, `RECEPTIONIST` u `OPHTHALMOLOGIST` → `200` con `token`, `name`, `username` y `role`.
+12. `POST /api/auth/logout` con el token de staff → `204`; una petición protegida posterior con ese token → `401 SESSION_INVALID`.
 
 ## 5. Patrones aplicados
 
@@ -106,7 +109,7 @@ Solo está expuesto Actuator health: `/actuator/health` con detalles siempre vis
 
 1. No hay API Gateway, Eureka, Config Server, Keycloak, RabbitMQ ni OTLP en este repositorio.
 2. `ms-patients` es un placeholder; todavía no hay comunicación inter-servicios.
-3. `429 RATE_LIMITED`, registro de staff y login de staff siguen pendientes de backend.
+3. `429 RATE_LIMITED` y registro de staff siguen pendientes de backend; el login de staff ya está implementado.
 4. `AUTH-DOC-02` ya es v0.8 y define `POST /api/auth/logout` con `204 No Content`.
 5. `.env.example` no se consume en Docker ni en runtime; solo genera `.env` en CI y sirve como plantilla local.
 6. El volumen `ms_auth_pgdata` conserva cuentas y sesiones entre reinicios; usar `docker compose down -v` para una verificación limpia.
