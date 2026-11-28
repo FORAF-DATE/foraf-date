@@ -21,7 +21,7 @@ foraf-date/
 └── README.md
 ```
 
-Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created. See `docs/ARQUITECTURA.md` for the architecture and communication paths.
+Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created. See `docs/ARCHITECTURE.md` for the architecture and communication paths.
 
 ## Root pom.xml
 
