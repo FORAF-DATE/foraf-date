@@ -7,21 +7,30 @@ Monorepo for FORAF-DATE, a web, mobile, and desktop platform for managing ophtha
 ```text
 foraf-date/
 ├── services/
-│   ├── ms-auth/       # Authentication microservice (placeholder)
+│   ├── ms-auth/       # Authentication microservice (Maven module + wrapper)
+│   │   ├── mvnw, mvnw.cmd
+│   │   ├── .mvn/wrapper/
+│   │   └── .gitattributes
 │   └── ms-patients/   # Patients microservice (placeholder)
 ├── pom.xml            # Root Maven aggregator POM
+├── .github/workflows/ci.yml
 ├── .gitignore         # Global ignore rules for every module
 └── README.md
 ```
 
-Each directory under `services/` is reserved for one independent Maven project (a microservice). The `.gitkeep` files keep those folders tracked in Git until the service code is added.
+Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created.
 
 ## Root pom.xml
 
-The root `pom.xml` is the aggregator POM for the microservices monorepo. It uses `<packaging>pom</packaging>` and the coordinates `org.forafdate:foraf-date-parent:1.0.0-SNAPSHOT`, and it lets the whole platform be validated from the repository root with one command:
+The root `pom.xml` is the aggregator POM for the microservices monorepo. It uses `<packaging>pom</packaging>` with coordinates `org.forafdate:foraf-date-parent:1.0.0-SNAPSHOT`, inherits Spring Boot `4.1.1`, and sets Java 21 for every module.
+
+Cada microservicio lleva su propio Maven Wrapper. Para `ms-auth`:
 
 ```bash
-mvn validate
+cd services/ms-auth
+./mvnw compile
 ```
 
-No `<modules>` are declared yet. A `<module>` entry is added to the root POM only when the corresponding service has its own `pom.xml`, so the reactor stays valid while services are being initialized.
+En Windows usa `mvnw.cmd compile`. El `pom.xml` raíz sigue siendo el agregador del monorepo para builds con Maven instalado.
+
+A `<module>` entry is added for the remaining services only when each one has its own `pom.xml`.
