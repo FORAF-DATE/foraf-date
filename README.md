@@ -145,6 +145,39 @@ To restore the service, start PostgreSQL again:
 docker compose start ms-auth-db
 ```
 
+### Patient Registration
+
+With PostgreSQL and MS-Auth running, register a patient:
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/patients/registration \
+  -H "Content-Type: application/json" \
+  -d '{"username":"ana.vera","password":"Example password 42","passwordConfirmation":"Example password 42"}'
+```
+
+`201 Created`:
+
+```json
+{"username":"ana.vera"}
+```
+
+The backend assigns `PATIENT` and `ACTIVE`, stores a BCrypt hash in `users.password_hash` and discards `passwordConfirmation`. PostgreSQL enforces username uniqueness, so concurrent requests for the same username create only one account.
+
+Field errors use `code` and `field`:
+
+```json
+{"code":"USERNAME_TAKEN","field":"username"}
+```
+
+| Status | code | field |
+|---|---|---|
+| 400 | `REQUIRED` | `username`, `password` or `passwordConfirmation` |
+| 400 | `USERNAME_LENGTH` | `username` |
+| 400 | `PASSWORD_LENGTH` | `password` |
+| 400 | `PASSWORD_MISMATCH` | `passwordConfirmation` |
+| 409 | `USERNAME_TAKEN` | `username` |
+| 400 | `MALFORMED_REQUEST` | omitted |
+
 ### Communication and Proposed Initial Schema
 
 MS-Auth exposes synchronous REST for patient and staff registration/login (AUTH-DOC-02). In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.

@@ -27,6 +27,8 @@ jobs:
           path: ~/.m2/wrapper
           key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('services/ms-auth/.mvn/wrapper/maven-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-maven-wrapper-
+      - name: Create local environment file
+        run: cp .env.example .env
       - name: Build and verify with Maven
         working-directory: services/ms-auth
         run: |
