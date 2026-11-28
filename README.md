@@ -261,6 +261,33 @@ curl -i http://localhost:8080/api/auth/patients/me \
 | 401 | `SESSION_INVALID` | omitted |
 | 401 | `SESSION_EXPIRED` | omitted |
 
+### Staff Sign-In
+
+Internal staff accounts are pre-created outside this endpoint. Sign in from Electron with an active account:
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/staff/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"lucia.torres","password":"Example password 42"}'
+```
+
+`200 OK`:
+
+```json
+{"token":"<opaque-token>","name":"Lucía Torres","username":"lucia.torres","role":"RECEPTIONIST"}
+```
+
+Supported roles are `ADMINISTRATOR`, `RECEPTIONIST` and `OPHTHALMOLOGIST`. A patient account using this route receives `403 ACCOUNT_TYPE_FORBIDDEN`. Reuse `POST /api/auth/logout` with the returned token to revoke the session.
+
+| Status | code | field |
+|---|---|---|
+| 400 | `REQUIRED` | `username` or `password` |
+| 400 | `MALFORMED_REQUEST` | omitted |
+| 422 | `INVALID_CREDENTIALS` | omitted |
+| 403 | `ACCOUNT_INACTIVE` | omitted |
+| 403 | `ACCOUNT_DISABLED` | omitted |
+| 403 | `ACCOUNT_TYPE_FORBIDDEN` | omitted |
+
 ### Sign-Out
 
 Revoke the presented token:
@@ -282,7 +309,7 @@ curl -i -X POST http://localhost:8080/api/auth/logout \
 
 ### Communication and Proposed Initial Schema
 
-MS-Auth exposes synchronous REST for patient and staff registration, sign-in, and sign-out (AUTH-DOC-02). In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.
+MS-Auth exposes synchronous REST for patient registration, patient and staff sign-in, and sign-out (AUTH-DOC-02). Staff registration remains pending. In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.
 
 The V1 schema is a proposed implementation based on `FORAF-DATE_MS-Auth_Modelo_de_Datos.md`, pending formal validation in AUTH-DOC-01:
 

@@ -66,6 +66,10 @@ public class UserEntity {
         return passwordHash;
     }
 
+    public String getDisplayName() {
+        return displayName;
+    }
+
     public Role getRole() {
         return role;
     }
