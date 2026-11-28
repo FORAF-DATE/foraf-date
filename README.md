@@ -21,7 +21,7 @@ foraf-date/
 └── README.md
 ```
 
-Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created. See `docs/ARQUITECTURA.md` for the architecture and communication paths.
+Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created. See `docs/ARCHITECTURE.md` for the architecture and communication paths.
 
 ## Root pom.xml
 
@@ -263,7 +263,7 @@ curl -i http://localhost:8080/api/auth/patients/me \
 
 ### Staff Sign-In
 
-Internal staff accounts are pre-created outside this endpoint. Sign in from Electron with an active account:
+Internal staff accounts are created outside this endpoint; locally you can use the optional seed described below. Sign in from Electron with an active account:
 
 ```bash
 curl -i -X POST http://localhost:8080/api/auth/staff/login \
@@ -287,6 +287,39 @@ Supported roles are `ADMINISTRATOR`, `RECEPTIONIST` and `OPHTHALMOLOGIST`. A pat
 | 403 | `ACCOUNT_INACTIVE` | omitted |
 | 403 | `ACCOUNT_DISABLED` | omitted |
 | 403 | `ACCOUNT_TYPE_FORBIDDEN` | omitted |
+
+### Internal Staff Seed (AUTH-DEV-04)
+
+Local development can seed three active internal staff accounts after Flyway migrations. The seed is disabled by default (`auth.seed.enabled=false`) and only runs when `AUTH_SEED_ENABLED=true` is present in `.env`:
+
+```properties
+AUTH_SEED_ENABLED=true
+AUTH_SEED_ADMIN_PASSWORD=<local-password>
+AUTH_SEED_RECEPTIONIST_PASSWORD=<local-password>
+AUTH_SEED_OPHTHALMOLOGIST_PASSWORD=<local-password>
+```
+
+`docker compose up --build -d` passes these variables to `ms-auth`. The `ApplicationRunner` is idempotent: it creates a missing account by username, updates an existing one in place, preserves its `id`, and hashes the configured password with the same `PasswordEncoder` used by registration. Every enabled startup rotates the password hash and restores `ACTIVE` status, `display_name` and `role`.
+
+| Username | display_name | role |
+|---|---|---|
+| `admin.test` | `Ana Ruiz` | `ADMINISTRATOR` |
+| `receptionist.test` | `Lucía Torres` | `RECEPTIONIST` |
+| `ophthalmologist.test` | `Mateo Silva` | `OPHTHALMOLOGIST` |
+
+No password is hardcoded in the seed source, `.env.example`, Spring properties or logs. `.env.example` only contains empty placeholders for CI and first-time setup. A missing or blank required password fails startup with `Missing required seed password: <VARIABLE_NAME>` before any account is saved.
+
+To verify, start with a clean volume and sign in as `receptionist.test` using the configured password:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+curl -i -X POST http://localhost:8080/api/auth/staff/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"receptionist.test","password":"<local-password>"}'
+```
+
+Expected: `200 OK` with a `token`, `name`, `username` and `role` for the seeded account.
 
 ### Sign-Out
 
