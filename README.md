@@ -13,7 +13,7 @@ foraf-date/
 │   │   ├── .gitattributes
 │   │   └── src/main/resources/db/migration/  # Flyway migrations
 │   └── ms-patients/   # Patients microservice (placeholder)
-├── docker-compose.yml # Local PostgreSQL for MS-Auth
+├── compose.yml        # Local PostgreSQL and MS-Auth via Docker Compose
 ├── .env.example       # Example environment variables
 ├── pom.xml            # Root Maven aggregator POM
 ├── .github/workflows/ci.yml
@@ -21,7 +21,7 @@ foraf-date/
 └── README.md
 ```
 
-Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created.
+Each directory under `services/` is an independent Maven project (a microservice). `ms-auth` is the first module; `ms-patients` remains a placeholder tracked with `.gitkeep` until its project is created. See `docs/ARQUITECTURA.md` for the architecture and communication paths.
 
 ## Root pom.xml
 
@@ -38,43 +38,48 @@ On Windows use `mvnw.cmd compile`. The root `pom.xml` remains the monorepo aggre
 
 A `<module>` entry is added for the remaining services only when each one has its own `pom.xml`.
 
-## MS-Auth: Local PostgreSQL, Flyway, and Health Check (AUTH-DEV-01-02 / AUTH-DEV-01-03)
+## MS-Auth: Docker Compose, PostgreSQL, Flyway, and Health Check (AUTH-DEV-01-02 / AUTH-DEV-01-03 / AUTH-DEV-02-04)
 
 ### Prerequisites
 
 - Docker Desktop / Docker Compose
-- Java 21
-- Port `5432` available for PostgreSQL (or adjust `DB_PORT` in `.env`)
+- Port `5434` available for PostgreSQL (or adjust `DB_PORT` in `.env`)
 - Port `8080` available for MS-Auth
 
 ### Setup
 
-1. Copy the example environment variables:
+1. Copy the example environment variables if `.env` does not exist:
 
 ```bash
 cp .env.example .env
 ```
 
-On Windows PowerShell you can also use `Copy-Item .env.example .env`. The `.env` file contains local credentials and is ignored by Git; `.env.example` has reference values.
+On Windows PowerShell use `Copy-Item .env.example .env`. `.env.example` is only a template for first-time setup and GitHub Actions (`ci.yml:31`); Maven and Docker Compose read `.env` (`services/ms-auth/pom.xml:91`, `compose.yml`). `.env` contains local credentials and is ignored by Git.
 
-2. Start PostgreSQL with Docker Compose from the repository root:
+2. Build and start PostgreSQL and MS-Auth from the repository root:
 
 ```bash
-docker compose up -d
+docker compose up --build -d
 ```
 
-This creates the dedicated database `ms_auth`, the development user, the volume `ms_auth_pgdata`, and exposes PostgreSQL on the `DB_PORT` defined in `.env`.
+This builds `services/ms-auth/Dockerfile`, starts the dedicated database `ms_auth`, applies Flyway migrations on MS-Auth startup, creates the volume `ms_auth_pgdata`, publishes PostgreSQL on `DB_PORT` from `.env`, and publishes MS-Auth on port `8080`.
 
-3. Start MS-Auth:
+3. Check container status:
+
+```bash
+docker compose ps
+```
+
+Both `ms-auth-db` and `ms-auth` should be up, with their healthchecks reported as healthy.
+
+4. Optional local Maven run without the MS-Auth container: with PostgreSQL already running, execute:
 
 ```bash
 cd services/ms-auth
 ./mvnw spring-boot:run
 ```
 
-On Windows use `mvnw.cmd spring-boot:run`.
-
-The Maven build automatically loads the `.env` file from the repository root and injects the database connection properties into `application.properties` during the resource filtering phase.
+On Windows use `mvnw.cmd spring-boot:run`. Maven loads `.env` from the repository root and injects the database connection properties into `application.properties` during resource filtering.
 
 ### Flyway Verification
 
@@ -144,6 +149,41 @@ To restore the service, start PostgreSQL again:
 ```bash
 docker compose start ms-auth-db
 ```
+
+### Docker Compose verification (AUTH-DEV-02-04)
+
+From the repository root:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+docker compose ps
+docker compose logs ms-auth
+curl -i http://localhost:8080/actuator/health
+```
+
+After Flyway applies `V1__init_auth_schema.sql`, health returns `200 OK` with `"status":"UP"`. Then exercise the patient API with a unique username:
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/patients/registration \
+  -H "Content-Type: application/json" \
+  -d '{"username":"docker.test","password":"Example password 42","passwordConfirmation":"Example password 42"}'
+
+curl -i -X POST http://localhost:8080/api/auth/patients/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"docker.test","password":"Example password 42"}'
+
+curl -i http://localhost:8080/api/auth/patients/me \
+  -H "Authorization: Bearer <opaque-token>"
+
+curl -i -X POST http://localhost:8080/api/auth/logout \
+  -H "Authorization: Bearer <opaque-token>"
+
+curl -i http://localhost:8080/api/auth/patients/me \
+  -H "Authorization: Bearer <opaque-token>"
+```
+
+Expected statuses: `201`, `200`, `200`, `204`, and `401 SESSION_INVALID` for the final protected request.
 
 ### Patient Registration
 
@@ -238,7 +278,7 @@ curl -i -X POST http://localhost:8080/api/auth/logout \
 | 401 | `SESSION_INVALID` | omitted |
 | 401 | `SESSION_EXPIRED` | omitted |
 
-`POST /api/auth/logout` and `204 No Content` are the FOR-67 proposal; AUTH-DOC-02 v0.7 does not define sign-out yet.
+`POST /api/auth/logout` and `204 No Content` are implemented for FOR-67 and defined in AUTH-DOC-02 v0.8.
 
 ### Communication and Proposed Initial Schema
 
