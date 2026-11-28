@@ -41,11 +41,21 @@ public class UserEntity {
     }
 
     public UserEntity(UUID id, String username, String passwordHash, Role role, AccountStatus status) {
+        this(id, username, passwordHash, null, role, status);
+    }
+
+    public UserEntity(UUID id, String username, String passwordHash, String displayName,
+                      Role role, AccountStatus status) {
         this.id = id;
         this.username = username;
         this.passwordHash = passwordHash;
+        this.displayName = displayName;
         this.role = role;
         this.status = status;
+    }
+
+    public UUID getId() {
+        return id;
     }
 
     public String getUsername() {
