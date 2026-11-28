@@ -21,6 +21,18 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Cache Maven Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: ${{ runner.os }}-maven-wrapper-${{ hashFiles('services/ms-auth/.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-maven-wrapper-
       - name: Build and verify with Maven
         working-directory: services/ms-auth
-        run: ./mvnw --batch-mode --update-snapshots verify
+        run: |
+          for i in 1 2 3; do
+            ./mvnw --batch-mode --update-snapshots verify && break
+            if [ "$i" -eq 3 ]; then exit 1; fi
+            echo "Retrying Maven Wrapper download ($i/3)..."
+            sleep 10
+          done
