@@ -13,8 +13,8 @@ foraf-date/
 │   │   ├── .gitattributes
 │   │   └── src/main/resources/db/migration/  # Flyway migrations
 │   └── ms-patients/   # Patients microservice (placeholder)
-├── docker-compose.yml # PostgreSQL local para MS-Auth
-├── .env.example       # Variables de entorno de ejemplo
+├── docker-compose.yml # Local PostgreSQL for MS-Auth
+├── .env.example       # Example environment variables
 ├── pom.xml            # Root Maven aggregator POM
 ├── .github/workflows/ci.yml
 ├── .gitignore         # Global ignore rules for every module
@@ -27,66 +27,133 @@ Each directory under `services/` is an independent Maven project (a microservice
 
 The root `pom.xml` is the aggregator POM for the microservices monorepo. It uses `<packaging>pom</packaging>` with coordinates `org.forafdate:foraf-date-parent:1.0.0-SNAPSHOT`, inherits Spring Boot `4.1.1`, and sets Java 21 for every module.
 
-Cada microservicio lleva su propio Maven Wrapper. Para `ms-auth`:
+Each microservice has its own Maven Wrapper. For `ms-auth`:
 
 ```bash
 cd services/ms-auth
 ./mvnw compile
 ```
 
-En Windows usa `mvnw.cmd compile`. El `pom.xml` raíz sigue siendo el agregador del monorepo para builds con Maven instalado.
+On Windows use `mvnw.cmd compile`. The root `pom.xml` remains the monorepo aggregator for builds with Maven installed.
 
 A `<module>` entry is added for the remaining services only when each one has its own `pom.xml`.
 
-## MS-Auth: PostgreSQL local y Flyway (AUTH-DEV-01-02)
+## MS-Auth: Local PostgreSQL, Flyway, and Health Check (AUTH-DEV-01-02 / AUTH-DEV-01-03)
 
-### Prerrequisitos
+### Prerequisites
 
 - Docker Desktop / Docker Compose
 - Java 21
+- Port `5432` available for PostgreSQL (or adjust `DB_PORT` in `.env`)
+- Port `8080` available for MS-Auth
 
-### Configuración
+### Setup
 
-1. Copia las variables de entorno de ejemplo:
+1. Copy the example environment variables:
 
 ```bash
 cp .env.example .env
 ```
 
-En Windows PowerShell también puedes usar `Copy-Item .env.example .env`. El archivo `.env` contiene credenciales locales y está ignorado por Git; `.env.example` tiene los valores de referencia.
+On Windows PowerShell you can also use `Copy-Item .env.example .env`. The `.env` file contains local credentials and is ignored by Git; `.env.example` has reference values.
 
-2. Levanta PostgreSQL con Docker Compose desde la raíz del repositorio:
+2. Start PostgreSQL with Docker Compose from the repository root:
 
 ```bash
 docker compose up -d
 ```
 
-Esto crea la base dedicada `ms_auth`, el usuario de desarrollo, el volumen `ms_auth_pgdata` y expone PostgreSQL en el `DB_PORT` definido en el `.env`.
+This creates the dedicated database `ms_auth`, the development user, the volume `ms_auth_pgdata`, and exposes PostgreSQL on the `DB_PORT` defined in `.env`.
 
-3. Arranca MS-Auth:
+3. Start MS-Auth:
 
 ```bash
 cd services/ms-auth
 ./mvnw spring-boot:run
 ```
 
-En Windows usa `mvnw.cmd spring-boot:run`.
+On Windows use `mvnw.cmd spring-boot:run`.
 
-### Verificación de Flyway
+The Maven build automatically loads the `.env` file from the repository root and injects the database connection properties into `application.properties` during the resource filtering phase.
 
-- Con una base vacía, Flyway aplica `V1__init_auth_schema.sql` y registra la migración en `flyway_schema_history`.
-- Al reiniciar el servicio con el mismo volumen Docker, Flyway detecta la migración aplicada y el arranque continúa normalmente.
-- La configuración usa `spring.jpa.hibernate.ddl-auto=validate`; Hibernate no crea ni modifica el esquema.
+### Flyway Verification
 
-### Comunicación y esquema inicial propuesto
+- With an empty database, Flyway applies `V1__init_auth_schema.sql` and registers the migration in `flyway_schema_history`.
+- When restarting the service with the same Docker volume, Flyway detects the applied migration and startup continues normally.
+- The configuration uses `spring.jpa.hibernate.ddl-auto=validate`; Hibernate does not create or modify the schema.
 
-MS-Auth expone REST síncrono para registro/login de pacientes y personal (AUTH-DOC-02). En desarrollo local usa PostgreSQL con token opaco: el cliente recibe el token y la base guarda su hash, vencimiento y revocación.
+### Health check (Actuator)
 
-El esquema V1 es una propuesta de implementación basada en `FORAF-DATE_MS-Auth_Modelo_de_Datos.md`, pendiente de validación formal en AUTH-DOC-01:
+With PostgreSQL and MS-Auth running, verify the service status:
 
-| Tabla | Propósito | Campos clave |
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+Expected response with database available (HTTP 200):
+
+```json
+{
+  "status": "UP",
+  "components": {
+    "db": {
+      "status": "UP",
+      "details": {
+        "database": "PostgreSQL",
+        "validationQuery": "isValid()"
+      }
+    },
+    "diskSpace": {
+      "status": "UP"
+    },
+    "ping": {
+      "status": "UP"
+    },
+    "ssl": {
+      "status": "UP"
+    }
+  }
+}
+```
+
+If PostgreSQL stops while MS-Auth is still running, the endpoint reports the database as unavailable. The `db` indicator changes to `DOWN` and the health check responds with status `DOWN` (HTTP 503):
+
+```bash
+docker compose stop ms-auth-db
+curl http://localhost:8080/actuator/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "DOWN",
+  "components": {
+    "db": {
+      "status": "DOWN",
+      "details": {
+        "error": "org.springframework.jdbc.CannotGetJdbcConnectionException: ..."
+      }
+    }
+  }
+}
+```
+
+To restore the service, start PostgreSQL again:
+
+```bash
+docker compose start ms-auth-db
+```
+
+### Communication and Proposed Initial Schema
+
+MS-Auth exposes synchronous REST for patient and staff registration/login (AUTH-DOC-02). In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.
+
+The V1 schema is a proposed implementation based on `FORAF-DATE_MS-Auth_Modelo_de_Datos.md`, pending formal validation in AUTH-DOC-01:
+
+| Table | Purpose | Key fields |
 |---|---|---|
-| `users` | Cuenta de acceso y rol | `id`, `username` (único, 4-30), `password_hash`, `display_name`, `role`, `status`, `created_at` |
-| `auth_sessions` | Sesiones locales opacas | `id`, `user_id` (FK), `token_hash` (SHA-256, único), `created_at`, `expires_at`, `revoked_at` |
+| `users` | Access account and role | `id`, `username` (unique, 4-30), `password_hash`, `display_name`, `role`, `status`, `created_at` |
+| `auth_sessions` | Local opaque sessions | `id`, `user_id` (FK), `token_hash` (SHA-256, unique), `created_at`, `expires_at`, `revoked_at` |
 
-Relación: un `user` puede tener cero o muchas `auth_sessions`; cada sesión pertenece a un solo usuario.
+Relationship: a `user` can have zero or many `auth_sessions`; each session belongs to a single user.
