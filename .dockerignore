@@ -1,0 +1,9 @@
+.git
+.env.example
+target/
+build/
+out/
+.vscode/
+.idea/
+*.doc
+*.log
