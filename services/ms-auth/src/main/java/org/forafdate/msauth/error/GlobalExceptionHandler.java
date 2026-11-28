@@ -22,21 +22,31 @@ public class GlobalExceptionHandler {
         }
         ObjectError error = errors.get(0);
         ErrorCode code = parseCode(error.getDefaultMessage());
-        String field = error instanceof FieldError fieldError ? fieldError.getField() : "passwordConfirmation";
+        String field = error instanceof FieldError fieldError
+                ? fieldError.getField()
+                : (code == ErrorCode.PASSWORD_MISMATCH ? "passwordConfirmation" : null);
         return ResponseEntity.badRequest().body(new ApiError(code, field));
     }
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiError> handleApiException(ApiException exception) {
-        HttpStatus status = exception.code() == ErrorCode.USERNAME_TAKEN
-                ? HttpStatus.CONFLICT
-                : HttpStatus.BAD_REQUEST;
-        return ResponseEntity.status(status).body(new ApiError(exception.code(), exception.field()));
+        return ResponseEntity.status(statusFor(exception.code()))
+                .body(new ApiError(exception.code(), exception.field()));
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, HttpMediaTypeNotSupportedException.class})
     public ResponseEntity<ApiError> handleMalformedRequest(Exception exception) {
         return ResponseEntity.badRequest().body(new ApiError(ErrorCode.MALFORMED_REQUEST, null));
+    }
+
+    private HttpStatus statusFor(ErrorCode code) {
+        return switch (code) {
+            case USERNAME_TAKEN -> HttpStatus.CONFLICT;
+            case INVALID_CREDENTIALS -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case ACCOUNT_INACTIVE, ACCOUNT_DISABLED, ACCOUNT_TYPE_FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case SESSION_REQUIRED, SESSION_INVALID, SESSION_EXPIRED -> HttpStatus.UNAUTHORIZED;
+            default -> HttpStatus.BAD_REQUEST;
+        };
     }
 
     private ErrorCode parseCode(String message) {

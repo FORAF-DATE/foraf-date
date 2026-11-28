@@ -178,6 +178,49 @@ Field errors use `code` and `field`:
 | 409 | `USERNAME_TAKEN` | `username` |
 | 400 | `MALFORMED_REQUEST` | omitted |
 
+### Patient Sign-In
+
+Sign in with an active patient account:
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/patients/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"ana.vera","password":"Example password 42"}'
+```
+
+`200 OK`:
+
+```json
+{"token":"<opaque-token>","username":"ana.vera"}
+```
+
+Only the SHA-256 hexadecimal hash is stored in `auth_sessions.token_hash`. Sessions expire after 24 hours by default (`auth.session.ttl-minutes=1440`).
+
+Protected request:
+
+```bash
+curl -i http://localhost:8080/api/auth/patients/me \
+  -H "Authorization: Bearer <opaque-token>"
+```
+
+`200 OK`:
+
+```json
+{"username":"ana.vera"}
+```
+
+| Status | code | field |
+|---|---|---|
+| 400 | `REQUIRED` | `username` or `password` |
+| 400 | `MALFORMED_REQUEST` | omitted |
+| 422 | `INVALID_CREDENTIALS` | omitted |
+| 403 | `ACCOUNT_INACTIVE` | omitted |
+| 403 | `ACCOUNT_DISABLED` | omitted |
+| 403 | `ACCOUNT_TYPE_FORBIDDEN` | omitted |
+| 401 | `SESSION_REQUIRED` | omitted |
+| 401 | `SESSION_INVALID` | omitted |
+| 401 | `SESSION_EXPIRED` | omitted |
+
 ### Communication and Proposed Initial Schema
 
 MS-Auth exposes synchronous REST for patient and staff registration/login (AUTH-DOC-02). In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.
