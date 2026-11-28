@@ -42,8 +42,23 @@ public class SessionService {
         return new IssuedSession(token, session);
     }
 
+    public void revoke(String authorizationHeader) {
+        AuthSessionEntity session = requireActiveSession(authorizationHeader);
+        session.revoke(OffsetDateTime.now());
+        authSessionRepository.saveAndFlush(session);
+    }
+
     @Transactional(readOnly = true)
     public UserEntity requireActivePatient(String authorizationHeader) {
+        AuthSessionEntity session = requireActiveSession(authorizationHeader);
+        UserEntity user = session.getUser();
+        if (user.getStatus() != AccountStatus.ACTIVE || user.getRole() != Role.PATIENT) {
+            throw new ApiException(ErrorCode.SESSION_INVALID, null);
+        }
+        return user;
+    }
+
+    private AuthSessionEntity requireActiveSession(String authorizationHeader) {
         String token = extractToken(authorizationHeader);
         AuthSessionEntity session = authSessionRepository.findByTokenHash(tokenGenerator.hash(token))
                 .orElseThrow(() -> new ApiException(ErrorCode.SESSION_INVALID, null));
@@ -53,11 +68,7 @@ public class SessionService {
         if (!session.getExpiresAt().isAfter(OffsetDateTime.now())) {
             throw new ApiException(ErrorCode.SESSION_EXPIRED, null);
         }
-        UserEntity user = session.getUser();
-        if (user.getStatus() != AccountStatus.ACTIVE || user.getRole() != Role.PATIENT) {
-            throw new ApiException(ErrorCode.SESSION_INVALID, null);
-        }
-        return user;
+        return session;
     }
 
     private String extractToken(String authorizationHeader) {

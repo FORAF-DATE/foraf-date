@@ -221,9 +221,28 @@ curl -i http://localhost:8080/api/auth/patients/me \
 | 401 | `SESSION_INVALID` | omitted |
 | 401 | `SESSION_EXPIRED` | omitted |
 
+### Sign-Out
+
+Revoke the presented token:
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/logout \
+  -H "Authorization: Bearer <opaque-token>"
+```
+
+`204 No Content` with no response body. Only that session gets `auth_sessions.revoked_at`; other valid sessions for the same user keep access. A revoked token receives `401 SESSION_INVALID` on later protected requests.
+
+| Status | code | field |
+|---|---|---|
+| 401 | `SESSION_REQUIRED` | omitted |
+| 401 | `SESSION_INVALID` | omitted |
+| 401 | `SESSION_EXPIRED` | omitted |
+
+`POST /api/auth/logout` and `204 No Content` are the FOR-67 proposal; AUTH-DOC-02 v0.7 does not define sign-out yet.
+
 ### Communication and Proposed Initial Schema
 
-MS-Auth exposes synchronous REST for patient and staff registration/login (AUTH-DOC-02). In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.
+MS-Auth exposes synchronous REST for patient and staff registration, sign-in, and sign-out (AUTH-DOC-02). In local development it uses PostgreSQL with opaque tokens: the client receives the token and the database stores its hash, expiration, and revocation.
 
 The V1 schema is a proposed implementation based on `FORAF-DATE_MS-Auth_Modelo_de_Datos.md`, pending formal validation in AUTH-DOC-01:
 
