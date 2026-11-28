@@ -27,7 +27,7 @@ Es la vía norte-sur pública. El cliente llama directamente a `ms-auth` en `htt
 - `GET /api/auth/patients/me` → `PatientSignInController.java:34`
 - `POST /api/auth/staff/login` → `StaffSignInController.java:20`
 - `POST /api/auth/logout` → `SignOutController.java:20`
-- `GET /actuator/health` → configurado en `application.properties:17-20`
+- `GET /actuator/health` → configurado en `application.properties:18-21`
 
 No se usa `spring-boot-starter-security`. Las peticiones protegidas reciben un token opaco en `Authorization: Bearer <token>`; el servicio guarda solo su hash SHA-256 en `auth_sessions.token_hash`.
 
@@ -43,6 +43,7 @@ No existe todavía. `services/ms-patients/` contiene únicamente `.gitkeep`, por
 - Hibernate: `ddl-auto=validate` (`application.properties:8`), no crea ni modifica tablas.
 - Flyway: habilitado con `classpath:db/migration` (`application.properties:12-13`).
 - Schema: `V1__init_auth_schema.sql:1-25` crea `users`, `auth_sessions` y el índice por usuario.
+- Seed opcional: `StaffSeedRunner` espera a Flyway y llama a `StaffAccountSeeder` solo cuando `auth.seed.enabled=true`; hace upsert por `username` y conserva el `id` existente.
 - Sesiones: `expires_at`, `revoked_at` y TTL por defecto de 1440 minutos (`application.properties:15`).
 
 ### 2.4 Configuración por entorno
@@ -55,12 +56,16 @@ Compose carga automáticamente `.env` desde la raíz del proyecto. El runtime us
 | `DB_PORT` | Puerto host publicado de PostgreSQL |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Construcción de `SPRING_DATASOURCE_URL/USERNAME/PASSWORD` para `ms-auth` |
 | `DB_HOST`, `DB_PORT` | Arranque opcional de Maven desde la máquina local |
+| `AUTH_SEED_ENABLED` | Activa el seed local de staff; por defecto `false` |
+| `AUTH_SEED_ADMIN_PASSWORD`, `AUTH_SEED_RECEPTIONIST_PASSWORD`, `AUTH_SEED_OPHTHALMOLOGIST_PASSWORD` | Passwords de las tres cuentas de prueba; requeridos solo si el seed está activo |
+
+`application.properties:16` deja `auth.seed.enabled=false` para no afectar CI ni tests; Compose mapea las variables `AUTH_SEED_*` a propiedades Spring relajadas (`auth.seed.*`). Ningún password real vive en `.env.example`, Properties, logs ni código fuente.
 
 `services/ms-auth/pom.xml:79-97` lee `.env` para el filtrado de recursos. Por eso el Dockerfile copia `.env` solo en la etapa de build; `.dockerignore` excluye `.env.example` y artefactos locales, pero permite `.env`.
 
 ### 2.5 Observabilidad
 
-Solo está expuesto Actuator health: `/actuator/health` con detalles siempre visibles y probe habilitado (`application.properties:17-20`). No hay Config Server, OpenTelemetry, Grafana/LGTM ni correlación de trazas en este repositorio.
+Solo está expuesto Actuator health: `/actuator/health` con detalles siempre visibles y probe habilitado (`application.properties:18-21`). No hay Config Server, OpenTelemetry, Grafana/LGTM ni correlación de trazas en este repositorio.
 
 ## 3. Dockerfile y Compose
 
@@ -81,17 +86,18 @@ Solo está expuesto Actuator health: `/actuator/health` con detalles siempre vis
 ## 4. Flujo completo de verificación local
 
 1. `docker compose down -v` reinicia el volumen para garantizar migraciones pendientes.
-2. `docker compose up --build -d` construye la imagen y levanta PostgreSQL y MS-Auth.
-3. `docker compose ps` muestra ambos contenedores healthy.
-4. `docker compose logs ms-auth` muestra la migración `V1` aplicada por Flyway.
-5. `GET /actuator/health` devuelve `200 OK` con `"status":"UP"`.
-6. `POST /api/auth/patients/registration` crea una cuenta de prueba → `201`.
-7. `POST /api/auth/patients/login` devuelve token opaco → `200`.
-8. `GET /api/auth/patients/me` con el token → `200`.
-9. `POST /api/auth/logout` con el token → `204` y escribe `revoked_at`.
-10. `GET /api/auth/patients/me` con el mismo token → `401 SESSION_INVALID`.
-11. `POST /api/auth/staff/login` con una cuenta `ADMINISTRATOR`, `RECEPTIONIST` u `OPHTHALMOLOGIST` → `200` con `token`, `name`, `username` y `role`.
-12. `POST /api/auth/logout` con el token de staff → `204`; una petición protegida posterior con ese token → `401 SESSION_INVALID`.
+2. Configurar `AUTH_SEED_ENABLED=true` y las tres passwords en `.env` si se quiere probar el seed; dejarlo en `false` para CI.
+3. `docker compose up --build -d` construye la imagen y levanta PostgreSQL y MS-Auth.
+4. `docker compose ps` muestra ambos contenedores healthy.
+5. `docker compose logs ms-auth` muestra la migración `V1` aplicada por Flyway y, si corresponde, `Seeded 3 staff test accounts from environment variables`.
+6. `GET /actuator/health` devuelve `200 OK` con `"status":"UP"`.
+7. `POST /api/auth/patients/registration` crea una cuenta de prueba → `201`.
+8. `POST /api/auth/patients/login` devuelve token opaco → `200`.
+9. `GET /api/auth/patients/me` con el token → `200`.
+10. `POST /api/auth/logout` con el token → `204` y escribe `revoked_at`.
+11. `GET /api/auth/patients/me` con el mismo token → `401 SESSION_INVALID`.
+12. `POST /api/auth/staff/login` con una cuenta `ADMINISTRATOR`, `RECEPTIONIST` u `OPHTHALMOLOGIST` → `200` con `token`, `name`, `username` y `role`.
+13. `POST /api/auth/logout` con el token de staff → `204`; una petición protegida posterior con ese token → `401 SESSION_INVALID`.
 
 ## 5. Patrones aplicados
 
@@ -104,12 +110,13 @@ Solo está expuesto Actuator health: `/actuator/health` con detalles siempre vis
 | Flyway + `ddl-auto=validate` | `application.properties:8,12-13` | Schema versionado; Hibernate no lo modifica |
 | Healthcheck de contenedor | `/actuator/health` | Evidencia de arranque con DB disponible |
 | Configuración por entorno | `.env`, `compose.yml` | Sin credenciales hardcodeadas en Docker ni en el código |
+| ApplicationRunner seed | `StaffSeedRunner.java`, `StaffAccountSeeder.java` | Cuentas staff de desarrollo repetibles, con passwords solo por entorno |
 
 ## 6. Estado actual y puntos a tener en cuenta
 
 1. No hay API Gateway, Eureka, Config Server, Keycloak, RabbitMQ ni OTLP en este repositorio.
 2. `ms-patients` es un placeholder; todavía no hay comunicación inter-servicios.
-3. `429 RATE_LIMITED` y registro de staff siguen pendientes de backend; el login de staff ya está implementado.
+3. `429 RATE_LIMITED` y registro de staff siguen pendientes de backend; el login de staff ya está implementado y las cuentas internas de prueba pueden sembrarse con `AUTH_SEED_ENABLED=true`.
 4. `AUTH-DOC-02` ya es v0.8 y define `POST /api/auth/logout` con `204 No Content`.
 5. `.env.example` no se consume en Docker ni en runtime; solo genera `.env` en CI y sirve como plantilla local.
 6. El volumen `ms_auth_pgdata` conserva cuentas y sesiones entre reinicios; usar `docker compose down -v` para una verificación limpia.
